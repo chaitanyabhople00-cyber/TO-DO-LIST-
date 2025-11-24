@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Simple To-Do List</title>
+<style>
+  :root{font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;--card:#ffffff;--bg:#f4f6f8;--accent:#2563eb}
+  body{margin:0;background:var(--bg);color:#0f172a}
+  header{background:linear-gradient(90deg,#0ea5e9,#6366f1);color:white;padding:18px 20px;display:flex;align-items:center;justify-content:space-between}
+  .brand{font-weight:700;font-size:20px}
+  main{max-width:900px;margin:28px auto;padding:18px}
+  .card{background:var(--card);padding:18px;border-radius:12px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  input[type=text], input[type=date], textarea{padding:10px;border-radius:8px;border:1px solid #e6e9ef;width:100%;box-sizing:border-box}
+  .row{display:flex;gap:8px}
+  .row > * {flex:1}
+  button{background:var(--accent);color:white;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
+  .muted{color:#475569;font-size:13px}
+  .filters{display:flex;gap:8px;margin-top:10px}
+  .task-list{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+  .task{display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;border:1px solid #eef2ff}
+  .task.completed{opacity:0.7;text-decoration:line-through;background:#f8fafc}
+  .task .title{font-weight:600}
+  .task .meta{font-size:12px;color:#475569}
+  .actions{margin-left:auto;display:flex;gap:8px}
+  .icon-btn{background:transparent;border:1px solid #e6e9ef;padding:6px;border-radius:8px;cursor:pointer}
+  footer{max-width:900px;margin:20px auto;text-align:center;color:#6b7280;font-size:13px}
+  @media(min-width:720px){ .grid-2{display:grid;grid-template-columns:1fr 320px;gap:12px} }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">My To-Do List</div>
+  <nav class="muted">Frontend • localStorage • Single file</nav>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Create a Task</h2>
+    <form id="taskForm" autocomplete="off">
+      <div class="grid-2">
+        <div>
+          <label class="muted">Title</label>
+          <input id="title" type="text" required placeholder="Task title (eg. Study chapter 5)" />
+        </div>
+        <div>
+          <label class="muted">Due date (optional)</label>
+          <input id="due" type="date" />
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <label class="muted">Description</label>
+        <textarea id="desc" rows="3" placeholder="Short note..."></textarea>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+        <button type="submit">Add Task</button>
+        <div class="muted" style="font-size:13px">Saved locally in your browser.</div>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 style="margin:0">Tasks</h2>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <input id="search" type="text" placeholder="Search tasks..." style="width:220px" />
+        <select id="filter">
+          <option value="all">All</option>
+          <option value="active">Active</option>
+          <option value="completed">Completed</option>
+        </select>
+        <button id="exportBtn" class="icon-btn">Export JSON</button>
+        <button id="importBtn" class="icon-btn">Import</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+      </div>
+    </div>
+
+    <div class="filters muted" style="margin-top:10px">
+      <div id="counts">0 tasks</div>
+    </div>
+
+    <div id="list" class="task-list"></div>
+    <div id="empty" class="muted" style="margin-top:12px">No tasks yet — add your first task above.</div>
+  </section>
+</main>
+
+<footer>Project for SIP Report — To-Do List • Save homepage screenshot for report</footer>
+
+<script>
+(() => {
+  const form = document.getElementById('taskForm');
+  const title = document.getElementById('title');
+  const desc = document.getElementById('desc');
+  const due = document.getElementById('due');
+  const listEl = document.getElementById('list');
+  const empty = document.getElementById('empty');
+  const filter = document.getElementById('filter');
+  const search = document.getElementById('search');
+  const counts = document.getElementById('counts');
+  const exportBtn = document.getElementById('exportBtn');
+  const importBtn = document.getElementById('importBtn');
+  const importFile = document.getElementById('importFile');
+
+  let tasks = JSON.parse(localStorage.getItem('todo_tasks')||'[]');
+
+  function save(){ localStorage.setItem('todo_tasks', JSON.stringify(tasks)); render(); }
+
+  function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6) }
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const t = title.value.trim();
+    if(!t) return alert('Enter a title');
+    tasks.unshift({ id: uid(), title:t, desc:desc.value.trim(), due: due.value||null, done:false, created: new Date().toISOString() });
+    title.value=''; desc.value=''; due.value='';
+    save();
+  });
+
+  function toggleDone(id){
+    tasks = tasks.map(x => x.id===id? {...x, done: !x.done} : x);
+    save();
+  }
+  function delTask(id){
+    if(!confirm('Delete this task?')) return;
+    tasks = tasks.filter(x=>x.id!==id); save();
+  }
+  function editTask(id){
+    const t = tasks.find(x=>x.id===id);
+    const newTitle = prompt('Edit title', t.title);
+    if(newTitle===null) return;
+    t.title = newTitle.trim() || t.title;
+    const newDesc = prompt('Edit description', t.desc||'');
+    if(newDesc!==null) t.desc = newDesc;
+    const newDue = prompt('Edit due date (YYYY-MM-DD)', t.due||'');
+    if(newDue!==null) t.due = newDue || null;
+    save();
+  }
+
+  function render(){
+    const q = search.value.trim().toLowerCase();
+    const f = filter.value;
+    let filtered = tasks.filter(t => {
+      if(f==='active' && t.done) return false;
+      if(f==='completed' && !t.done) return false;
+      if(q && !(t.title.toLowerCase().includes(q) || (t.desc||'').toLowerCase().includes(q))) return false;
+      return true;
+    });
+    listEl.innerHTML = '';
+    counts.textContent = `${tasks.length} task${tasks.length!==1?'s':''}`;
+    if(filtered.length===0){ empty.style.display='block'; return; } else empty.style.display='none';
+    filtered.forEach(t => {
+      const el = document.createElement('div');
+      el.className = 'task' + (t.done? ' completed':'');
+      el.innerHTML = `
+        <input type="checkbox" ${t.done? 'checked':''} aria-label="done" />
+        <div>
+          <div class="title">${escapeHtml(t.title)}</div>
+          <div class="meta">${t.due? 'Due: '+t.due + ' • ' : '' }${t.desc? escapeHtml(t.desc) : ''}</div>
+        </div>
+        <div class="actions">
+          <button class="icon-btn btn-edit">Edit</button>
+          <button class="icon-btn btn-del">Delete</button>
+        </div>
+      `;
+      const checkbox = el.querySelector('input[type=checkbox]');
+      checkbox.addEventListener('change', ()=> toggleDone(t.id));
+      el.querySelector('.btn-del').addEventListener('click', ()=> delTask(t.id));
+      el.querySelector('.btn-edit').addEventListener('click', ()=> editTask(t.id));
+      listEl.appendChild(el);
+    });
+  }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m])}
+
+  search.addEventListener('input', render);
+  filter.addEventListener('change', render);
+
+  exportBtn.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(tasks, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'tasks.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+
+  importBtn.addEventListener('click', ()=> importFile.click());
+  importFile.addEventListener('change', (e)=>{
+    const f = e.target.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const data = JSON.parse(r.result);
+        if(!Array.isArray(data)) throw new Error('Invalid file');
+        // merge but avoid id conflicts
+        const existingIds = new Set(tasks.map(t=>t.id));
+        data.forEach(t => { t.id = t.id || uid(); if(existingIds.has(t.id)) t.id = uid(); tasks.push(t) });
+        save();
+      } catch(err){ alert('Invalid JSON file') }
+    };
+    r.readAsText(f);
+  });
+
+  // initial render
+  render();
+})();
+</script>
+</body>
+</html>
